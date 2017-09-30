@@ -1,0 +1,304 @@
+
+(inline C "
+#include <errno.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <limits.h>
+#include <dirent.h>
+")
+
+(defn sleep [seconds]
+  (inline C Integer "
+  replaceWorker();
+  Value *result = integerValue(sleep(((Integer *)seconds_0)->numVal));
+  dec_and_free(seconds_0, 1);
+  return(result);\n"))
+
+(defn realpath [path]
+  (inline C Maybe "
+  String *arg0Str = nullTerm(path_0);
+  char actualpath [PATH_MAX+1];
+  char *ptr;
+
+  if (realpath(arg0Str->buffer, actualpath) == NULL) {
+    dec_and_free((Value *)arg0Str, 1);
+    return(nothing);
+  } else {
+    dec_and_free((Value *)arg0Str, 1);
+    Value *sv = stringValue(actualpath);
+    Value *mv = maybe((List *)0, (Value *)0, sv);
+    return(mv);
+  }"))
+
+(defn access [file-path]
+  (inline C Maybe "
+  incRef(file_path_0, 1);
+  String *arg0Str = nullTerm(file_path_0);
+
+  if (access(arg0Str->buffer, F_OK) == -1) {
+    dec_and_free((Value *)file_path_0, 1);
+    dec_and_free((Value *)arg0Str, 1);
+    return(nothing);
+  } else {
+    dec_and_free((Value *)arg0Str, 1);
+    return(maybe((List *)0, (Value *)0, file_path_0));
+  }"))
+
+(defn dir-exists? [path]
+  (inline C Maybe "
+    String *arg0Str = nullTerm(path_0);
+    struct stat sb;
+
+    if (stat(arg0Str->buffer, &sb) == 0 && S_ISDIR(sb.st_mode))
+    {
+      dec_and_free((Value *)arg0Str, 1);
+      return(maybe((List *)0, (Value *)0, path_0));
+    }
+    else
+    {
+      dec_and_free((Value *)arg0Str, 1);
+      return(nothing);
+    }
+"))
+
+(def S_IRUSR (inline C Integer "(Value *)&(Integer){IntegerType,-1,S_IRUSR}"))
+(def S_IWUSR (inline C Integer "(Value *)&(Integer){IntegerType,-1,S_IWUSR}"))
+(def S_IXUSR (inline C Integer "(Value *)&(Integer){IntegerType,-1,S_IXUSR}"))
+(def S_IEXEC (inline C Integer "(Value *)&(Integer){IntegerType,-1,S_IEXEC}"))
+(def S_IRGRP (inline C Integer "(Value *)&(Integer){IntegerType,-1,S_IRGRP}"))
+(def S_IWGRP (inline C Integer "(Value *)&(Integer){IntegerType,-1,S_IWGRP}"))
+(def S_IXGRP (inline C Integer "(Value *)&(Integer){IntegerType,-1,S_IXGRP}"))
+(def S_IRWXG (inline C Integer "(Value *)&(Integer){IntegerType,-1,S_IRWXG}"))
+(def S_IROTH (inline C Integer "(Value *)&(Integer){IntegerType,-1,S_IROTH}"))
+(def S_IWOTH (inline C Integer "(Value *)&(Integer){IntegerType,-1,S_IWOTH}"))
+(def S_IXOTH (inline C Integer "(Value *)&(Integer){IntegerType,-1,S_IXOTH}"))
+
+(defn file-stat* [path]
+  (inline C Maybe "
+    String *arg0Str = nullTerm(path_0);
+    struct stat sb;
+    List *infoList = empty_list;
+
+    if (stat(arg0Str->buffer, &sb) == 0)
+    {
+      if (S_ISDIR(sb.st_mode)) {
+        infoList = listCons((Value *)&const0, infoList);
+        infoList = listCons(maybeNothing, infoList);
+      } else {
+        infoList = listCons(integerValue(sb.st_size), infoList);
+        infoList = listCons(nothing, infoList);
+      }
+      infoList = listCons(integerValue(sb.st_ctime), infoList);
+      infoList = listCons(integerValue(sb.st_mode), infoList);
+
+      dec_and_free((Value *)arg0Str, 1);
+      Value *info = maybe((List *)0, (Value *)0, (Value *)infoList);
+      dec_and_free((Value *)infoList, 1);
+      return(info);
+    }
+    else
+    {
+      dec_and_free((Value *)arg0Str, 1);
+      return(nothing);
+    }
+"))
+
+(defn file-list* [path]
+  (inline C Maybe "
+    String *arg0Str = nullTerm(path_0);
+    struct stat sb;
+
+    if (stat(arg0Str->buffer, &sb) == 0 && S_ISDIR(sb.st_mode))
+    {
+      DIR *dir;
+      struct dirent *ent;
+      List *entries = empty_list;
+      if ((dir = opendir (arg0Str->buffer)) != NULL) {
+        while ((ent = readdir (dir)) != NULL) {
+          entries = listCons(stringValue(ent->d_name), entries);
+        }
+        closedir (dir);
+      } else {
+        /* could not open directory */
+        dec_and_free((Value *)arg0Str, 1);
+        return(nothing);
+      }
+      dec_and_free((Value *)arg0Str, 1);
+      Value *entryList = maybe((List *)0, (Value *)0, (Value *)entries);
+      dec_and_free((Value *)entries, 1);
+      return(entryList);
+    }
+    else
+    {
+      dec_and_free((Value *)arg0Str, 1);
+      return(nothing);
+    }
+"))
+
+(deftype FileInfo [name permissions ctime size]
+  Stringable
+  (string-list [x]
+    (comp (list "<FileInfo ")
+          (interpose (flat-map (type-args x) string-list) ", ")
+          (list ">"))))
+
+(deftype DirInfo [name permissions ctime]
+  Stringable
+  (string-list [x]
+    (comp (list "<DirInfo ")
+          (interpose (flat-map (type-args x) string-list) ", ")
+          (list ">"))))
+
+(defn list-files [path]
+  (for [name-list (file-list* path)]
+    (map (filter (map name-list (fn [name]
+                                  ;; TODO: maybe refactor this
+                                  (and (= nothing (= "." (subs name 0 1)))
+                                       (flat-map (file-stat* (str path "/" name))
+                                                 (fn [[permissions ctime dir? size]]
+                                                   (or (and dir? (maybe (DirInfo name permissions ctime)))
+                                                       (maybe (FileInfo name permissions ctime size))))))))
+                 identity)
+         extract)))
+
+(defn get-environment [variable-name]
+  (inline C Maybe "
+  char *var;
+  if (variable_name_0->type == StringType) {
+    var = ((String *)variable_name_0)->buffer;
+  } else if (variable_name_0->type == SubStringType) {
+    var = ((SubString *)variable_name_0)->buffer;
+  } else {
+    fprintf(stderr, \"\\ninvalid type for 'get-environment'\\n\");
+    abort();
+  }
+
+// TODO: needs mutex
+  char *envStr = getenv(var);
+  dec_and_free(variable_name_0, 1);
+  int64_t len;
+  if (envStr == NULL)
+    len = 0;
+  else
+    len = strlen(envStr);
+  if (len == 0) {
+    return(nothing);
+  } else {
+    String *strVal = malloc_string(len);
+    strncpy(strVal->buffer, envStr, len);
+    Value *mv = maybe((List *)0, (Value *)0, (Value *)strVal);
+    return(mv);
+  }
+"))
+
+(defn error-number []
+  (inline C Integer "
+  return(integerValue(errno));
+"))
+
+(defn error-string []
+  (inline C Maybe "
+  char errStr[1000];
+  strerror_r(errno, errStr, 1000);
+  int64_t len = strlen(errStr);
+  String *strVal = malloc_string(len);
+  strncpy(strVal->buffer, errStr, len);
+  return((Value *)strVal);
+"))
+
+(defn change-directory [path]
+  (inline C Maybe "
+  String *path = nullTerm(path_0);
+  if (chdir(path->buffer) == 0) {
+    dec_and_free((Value *)path, 1);
+    return(maybe((List *)0, (Value *)0, (Value *)path_0));
+  } else
+    dec_and_free((Value *)path, 1);
+    return(nothing);
+"))
+
+(defn current-directory []
+  (inline C Maybe "
+  char path[1000];
+  if (getcwd(path, 1000) == NULL) {
+    return(nothing);
+  } else {
+    int64_t len = strlen(path);
+    String *strVal = malloc_string(len);
+    strncpy(strVal->buffer, path, len);
+    Value *mv = maybe((List *)0, (Value *)0, (Value *)strVal);
+    return(mv);
+  }
+"))
+
+(defn make-directory [path mode]
+  (inline C Maybe "
+  String *path = nullTerm(path_0);
+  if (mkdir(path->buffer, ((Integer *)mode_1)->numVal) == 0) {
+    dec_and_free((Value *)path, 1);
+    dec_and_free(mode_1, 1);
+    return(maybe((List *)0, (Value *)0, (Value *)path_0));
+  } else
+    dec_and_free((Value *)path, 1);
+    dec_and_free(path_0, 1);
+    dec_and_free(mode_1, 1);
+    return(nothing);
+"))
+
+(defn exec
+  ([path]
+   (exec path empty-list))
+  ([path args]
+   (inline C Maybe "
+  String *path = nullTerm(path_0);;
+
+  List *argList = (List *)args_1;
+  if (argList->len == 0) {
+    execl(path->buffer, (char *)0);
+    exit(1);
+  } else {
+    char **args = malloc(sizeof(char*) * (argList->len + 2));
+    int i;
+    Value *arg;
+    args[0] = path->buffer;
+    for (i = 1;
+         argList != (List *)0 && argList->head != (Value *)0;
+         argList = argList->tail, i++) {
+      arg = argList->head;
+      if (arg->type == StringType) {
+        args[i] = ((String *)arg)->buffer;
+      } else {
+        args[i] = ((SubString *)arg)->buffer;
+      }
+    }
+    args[i] = (char *)0;
+    execv(path->buffer, args);
+    exit(1);
+  }
+  dec_and_free(args_1, 1);
+  return(nothing);
+")))
+
+(defn fork []
+  (inline C Integer "
+  return(integerValue(fork()));
+"))
+
+(defn waitpid [pid]
+  (inline C Integer "
+  int rv;
+  int pid = (int)((Integer *)pid_0)->numVal;
+  dec_and_free(pid_0, 1);
+  wait(&rv);
+  return(integerValue(WEXITSTATUS(rv)));
+"))
+
+;; TODO: only temporary until I get the Process datatype written
+(defn sh-proc [path args]
+  (let [pid (fork)]
+    (or (and (< pid 0)
+             (let [_ (println "Error forking" path "process")]
+               (abort)))
+        (and (= pid 0)
+             (maybe (exec path (map args null-term))))
+        (= 0 (waitpid pid)))))
