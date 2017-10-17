@@ -17,7 +17,7 @@
 (defn realpath [path]
   (inline C Maybe "
   String *arg0Str = nullTerm(path_0);
-  char actualpath [PATH_MAX+1];
+  char actualpath [2000];
   char *ptr;
 
   if (realpath(arg0Str->buffer, actualpath) == NULL) {
@@ -64,7 +64,6 @@
 (def S_IRUSR (inline C Integer "(Value *)&(Integer){IntegerType,-1,S_IRUSR}"))
 (def S_IWUSR (inline C Integer "(Value *)&(Integer){IntegerType,-1,S_IWUSR}"))
 (def S_IXUSR (inline C Integer "(Value *)&(Integer){IntegerType,-1,S_IXUSR}"))
-(def S_IEXEC (inline C Integer "(Value *)&(Integer){IntegerType,-1,S_IEXEC}"))
 (def S_IRGRP (inline C Integer "(Value *)&(Integer){IntegerType,-1,S_IRGRP}"))
 (def S_IWGRP (inline C Integer "(Value *)&(Integer){IntegerType,-1,S_IWGRP}"))
 (def S_IXGRP (inline C Integer "(Value *)&(Integer){IntegerType,-1,S_IXGRP}"))
