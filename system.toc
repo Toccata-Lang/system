@@ -3,7 +3,11 @@
 #include <errno.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#if defined(__linux__)
+#include <linux/limits.h>
+#elif defined(__APPLE__) && defined(__MACH__)
 #include <limits.h>
+#endif
 #include <dirent.h>
 ")
 
@@ -253,7 +257,7 @@
 
   List *argList = (List *)args_1;
   if (argList->len == 0) {
-    execl(path->buffer, (char *)0);
+    execl(path->buffer, \"\");
     exit(1);
   } else {
     char **args = malloc(sizeof(char*) * (argList->len + 2));
