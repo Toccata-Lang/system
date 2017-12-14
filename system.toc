@@ -139,6 +139,11 @@
 "))
 
 (deftype FileInfo [name permissions ctime size]
+  (assert (instance? String name))
+  (assert (instance? Integer permissions))
+  (assert (instance? Integer ctime))
+  (assert (instance? Integer size))
+
   Stringable
   (string-list [x]
     (comp (list "<FileInfo ")
@@ -146,6 +151,10 @@
           (list ">"))))
 
 (deftype DirInfo [name permissions ctime]
+  (assert (instance? String name))
+  (assert (instance? Integer permissions))
+  (assert (instance? Integer ctime))
+
   Stringable
   (string-list [x]
     (comp (list "<DirInfo ")
@@ -165,15 +174,13 @@
          extract)))
 
 (defn get-environment [variable-name]
+  (assert (instance? String variable-name))
   (inline C Maybe "
   char *var;
-  if (variable_name_0->type == StringType) {
+  if (variable_name_0->type == StringBufferType) {
     var = ((String *)variable_name_0)->buffer;
   } else if (variable_name_0->type == SubStringType) {
     var = ((SubString *)variable_name_0)->buffer;
-  } else {
-    fprintf(stderr, \"\\ninvalid type for 'get-environment'\\n\");
-    abort();
   }
 
 // TODO: needs mutex
@@ -268,7 +275,7 @@
          argList != (List *)0 && argList->head != (Value *)0;
          argList = argList->tail, i++) {
       arg = argList->head;
-      if (arg->type == StringType) {
+      if (arg->type == StringBufferType) {
         args[i] = ((String *)arg)->buffer;
       } else {
         args[i] = ((SubString *)arg)->buffer;
