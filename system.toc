@@ -162,16 +162,20 @@
           (list ">"))))
 
 (defn list-files [path]
-  (for [name-list (file-list* path)]
-    (map (filter (map name-list (fn [name]
-                                  ;; TODO: maybe refactor this
-                                  (and (= nothing (= "." (subs name 0 1)))
-                                       (flat-map (file-stat* (str path "/" name))
-                                                 (fn [[permissions ctime dir? size]]
-                                                   (or (and dir? (maybe (DirInfo name permissions ctime)))
-                                                       (maybe (FileInfo name permissions ctime size))))))))
-                 identity)
-         extract)))
+  (map (file-list* path)
+       (fn [name-list]
+         (assert (instance? List name-list))
+
+         (-> name-list
+             (map (fn [name]
+                    ;; TODO: maybe refactor this
+                    (and (= nothing (= "." (subs name 0 1)))
+                         (flat-map (file-stat* (str path "/" name))
+                                   (fn [[permissions ctime dir? size]]
+                                     (or (and dir? (maybe (DirInfo name permissions ctime)))
+                                         (maybe (FileInfo name permissions ctime size))))))))
+             (filter identity)
+             (map extract)))))
 
 (defn get-environment [variable-name]
   (assert (instance? String variable-name))
