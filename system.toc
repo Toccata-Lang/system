@@ -85,7 +85,7 @@
     if (stat(arg0Str->buffer, &sb) == 0)
     {
       if (S_ISDIR(sb.st_mode)) {
-        infoList = listCons((Value *)&const0, infoList);
+        infoList = listCons(const0Ptr, infoList);
         infoList = listCons(maybeNothing, infoList);
       } else {
         infoList = listCons(integerValue(sb.st_size), infoList);
@@ -96,7 +96,6 @@
 
       dec_and_free((Value *)arg0Str, 1);
       Value *info = maybe((List *)0, (Value *)0, (Value *)infoList);
-      dec_and_free((Value *)infoList, 1);
       return(info);
     }
     else
@@ -128,7 +127,6 @@
       }
       dec_and_free((Value *)arg0Str, 1);
       Value *entryList = maybe((List *)0, (Value *)0, (Value *)entries);
-      dec_and_free((Value *)entries, 1);
       return(entryList);
     }
     else
@@ -165,17 +163,14 @@
   (map (file-list* path)
        (fn [name-list]
          (assert (instance? List name-list))
-
-         (-> name-list
-             (map (fn [name]
-                    ;; TODO: maybe refactor this
-                    (and (= nothing (= "." (subs name 0 1)))
-                         (flat-map (file-stat* (str path "/" name))
-                                   (fn [[permissions ctime dir? size]]
-                                     (or (and dir? (maybe (DirInfo name permissions ctime)))
-                                         (maybe (FileInfo name permissions ctime size))))))))
-             (filter identity)
-             (map extract)))))
+         (for [name name-list
+               :when-not (= "." (subs name 0 1))
+               :let [file-info (map (file-stat* (str path "/" name))
+                                    (fn [[permissions ctime dir? size]]
+                                      (either (and dir? (maybe (DirInfo name permissions ctime)))
+                                              (FileInfo name permissions ctime size))))]
+               :when file-info]
+           (extract file-info)))))
 
 (defn get-environment [variable-name]
   (assert (instance? String variable-name))
