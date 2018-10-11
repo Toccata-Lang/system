@@ -302,6 +302,17 @@
   return(integerValue(WEXITSTATUS(rv)));
 "))
 
+(defn file-directory [src-file-name]
+  (map (realpath src-file-name)
+       (fn [real-path]
+         (let [[path-len] (reduce real-path [-1 0]
+                                  (fn [[slash-pos c-pos] c]
+                                    (let [c-pos (inc c-pos)]
+                                      (either (and (= c "/")
+                                                   (maybe [c-pos c-pos]))
+                                              [slash-pos c-pos]))))]
+           (subs real-path 0 path-len)))))
+
 ;; TODO: only temporary until I get the Process datatype written
 (defn sh-proc [path args]
   (let [pid (fork)]
