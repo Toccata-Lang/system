@@ -246,10 +246,9 @@
   if (mkdir(path->buffer, ((Integer *)mode_1)->numVal) == 0) {
     dec_and_free((Value *)path, 1);
     dec_and_free(mode_1, 1);
-    return(maybe((List *)0, (Value *)0, (Value *)path_0));
+    return(maybeNothing);
   } else
     dec_and_free((Value *)path, 1);
-    dec_and_free(path_0, 1);
     dec_and_free(mode_1, 1);
     return(nothing);
 "))
