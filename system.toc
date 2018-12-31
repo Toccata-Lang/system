@@ -76,14 +76,13 @@
 (def S_IWOTH (inline C Integer "(Value *)&(Integer){IntegerType,-1,S_IWOTH}"))
 (def S_IXOTH (inline C Integer "(Value *)&(Integer){IntegerType,-1,S_IXOTH}"))
 
-(defn file-stat* [path]
+(defn file-stat [path]
   (inline C Maybe "
     String *arg0Str = nullTerm(path_0);
     struct stat sb;
     List *infoList = empty_list;
 
-    if (stat(arg0Str->buffer, &sb) == 0)
-    {
+    if (stat(arg0Str->buffer, &sb) == 0) {
       if (S_ISDIR(sb.st_mode)) {
         infoList = listCons(const0Ptr, infoList);
         infoList = listCons(maybeNothing, infoList);
@@ -97,9 +96,7 @@
       dec_and_free((Value *)arg0Str, 1);
       Value *info = maybe((List *)0, (Value *)0, (Value *)infoList);
       return(info);
-    }
-    else
-    {
+    } else {
       dec_and_free((Value *)arg0Str, 1);
       return(nothing);
     }
@@ -165,7 +162,7 @@
          (assert (instance? List name-list))
          (for [name name-list
                :when-not (= "." (subs name 0 1))
-               :let [file-info (map (file-stat* (str path "/" name))
+               :let [file-info (map (file-stat (str path "/" name))
                                     (fn [[permissions ctime dir? size]]
                                       (either (and dir? (maybe (DirInfo name permissions ctime)))
                                               (FileInfo name permissions ctime size))))]
@@ -243,7 +240,8 @@
 (defn make-directory [path mode]
   (inline C Maybe "
   String *path = nullTerm(path_0);
-  if (mkdir(path->buffer, ((Integer *)mode_1)->numVal) == 0) {
+  if (mkdir(path->buffer, ((Integer *)mode_1)->numVal) == 0 ||
+      errno == EEXIST) {
     dec_and_free((Value *)path, 1);
     dec_and_free(mode_1, 1);
     return(maybeNothing);
@@ -252,6 +250,19 @@
     dec_and_free(mode_1, 1);
     return(nothing);
 "))
+
+(defn file-directory [src-file-name]
+  (map (realpath src-file-name)
+       (fn [real-path]
+         (let [[path-len] (reduce real-path [-1 0]
+                                  (fn [[slash-pos c-pos] c]
+                                    (let [c-pos (inc c-pos)]
+                                      (either (and (= c "/")
+                                                   (maybe [c-pos c-pos]))
+                                              [slash-pos c-pos]))))]
+           (subs real-path 0 path-len)))))
+
+;; TODO: eliminate once shell-proc is online
 
 (defn exec
   ([path]
@@ -300,24 +311,3 @@
   wait(&rv);
   return(integerValue(WEXITSTATUS(rv)));
 "))
-
-(defn file-directory [src-file-name]
-  (map (realpath src-file-name)
-       (fn [real-path]
-         (let [[path-len] (reduce real-path [-1 0]
-                                  (fn [[slash-pos c-pos] c]
-                                    (let [c-pos (inc c-pos)]
-                                      (either (and (= c "/")
-                                                   (maybe [c-pos c-pos]))
-                                              [slash-pos c-pos]))))]
-           (subs real-path 0 path-len)))))
-
-;; TODO: only temporary until I get the Process datatype written
-(defn sh-proc [path args]
-  (let [pid (fork)]
-    (or (and (< pid 0)
-             (let [_ (println "Error forking" path "process")]
-               (abort)))
-        (and (= pid 0)
-             (maybe (exec path (map args null-term))))
-        (= 0 (waitpid pid)))))
