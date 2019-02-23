@@ -141,9 +141,11 @@
 
   Stringable
   (string-list [x]
-    (comp (list "<FileInfo ")
-          (interpose (flat-map (type-args x) string-list) ", ")
-          (list ">"))))
+    (comp (list "<FileInfo "
+                (str name) ", "
+                (str permissions) ", "
+                (str ctime) ", "
+                (str size) ">"))))
 
 (deftype DirInfo [name permissions ctime]
   (assert (instance? String name))
@@ -152,9 +154,10 @@
 
   Stringable
   (string-list [x]
-    (comp (list "<DirInfo ")
-          (interpose (flat-map (type-args x) string-list) ", ")
-          (list ">"))))
+    (comp (list "<DirInfo "
+                (str name) ", "
+                (str permissions) ", "
+                (str ctime) ">"))))
 
 (defn list-files [path]
   (map (file-list* path)
