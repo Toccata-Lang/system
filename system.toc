@@ -30,7 +30,7 @@
   } else {
     dec_and_free((Value *)arg0Str, 1);
     Value *sv = stringValue(actualpath);
-    Value *mv = maybe((List *)0, (Value *)0, sv);
+    Value *mv = maybe((Vector *)0, (Value *)0, sv);
     return(mv);
   }"))
 
@@ -45,7 +45,7 @@
     return(nothing);
   } else {
     dec_and_free((Value *)arg0Str, 1);
-    return(maybe((List *)0, (Value *)0, file_path_0));
+    return(maybe((Vector *)0, (Value *)0, file_path_0));
   }"))
 
 (defn dir-exists? [path]
@@ -56,7 +56,7 @@
     if (stat(arg0Str->buffer, &sb) == 0 && S_ISDIR(sb.st_mode))
     {
       dec_and_free((Value *)arg0Str, 1);
-      return(maybe((List *)0, (Value *)0, path_0));
+      return(maybe((Vector *)0, (Value *)0, path_0));
     }
     else
     {
@@ -94,7 +94,7 @@
       infoList = listCons(integerValue(sb.st_mode), infoList);
 
       dec_and_free((Value *)arg0Str, 1);
-      Value *info = maybe((List *)0, (Value *)0, (Value *)infoList);
+      Value *info = maybe((Vector *)0, (Value *)0, (Value *)infoList);
       return(info);
     } else {
       dec_and_free((Value *)arg0Str, 1);
@@ -123,7 +123,7 @@
         return(nothing);
       }
       dec_and_free((Value *)arg0Str, 1);
-      Value *entryList = maybe((List *)0, (Value *)0, (Value *)entries);
+      Value *entryList = maybe((Vector *)0, (Value *)0, (Value *)entries);
       return(entryList);
     }
     else
@@ -195,7 +195,7 @@
   } else {
     String *strVal = malloc_string(len);
     strncpy(strVal->buffer, envStr, len);
-    Value *mv = maybe((List *)0, (Value *)0, (Value *)strVal);
+    Value *mv = maybe((Vector *)0, (Value *)0, (Value *)strVal);
     return(mv);
   }
 "))
@@ -220,7 +220,7 @@
   String *path = nullTerm(path_0);
   if (chdir(path->buffer) == 0) {
     dec_and_free((Value *)path, 1);
-    return(maybe((List *)0, (Value *)0, (Value *)path_0));
+    return(maybe((Vector *)0, (Value *)0, (Value *)path_0));
   } else
     dec_and_free((Value *)path, 1);
     return(nothing);
@@ -235,7 +235,7 @@
     int64_t len = strlen(path);
     String *strVal = malloc_string(len);
     strncpy(strVal->buffer, path, len);
-    Value *mv = maybe((List *)0, (Value *)0, (Value *)strVal);
+    Value *mv = maybe((Vector *)0, (Value *)0, (Value *)strVal);
     return(mv);
   }
 "))
