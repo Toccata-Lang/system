@@ -12,6 +12,8 @@
 ")
 
 (defn sleep [seconds]
+  (assert (instance? Integer seconds))
+
   (inline C Integer "
   replaceWorker();
   Value *result = integerValue(sleep(((Integer *)seconds_0)->numVal));
@@ -19,7 +21,9 @@
   return(result);\n"))
 
 (defn realpath [path]
-  (inline C Maybe "
+  (assert (instance? String path))
+
+  (inline C (maybe-of String) "
   String *arg0Str = nullTerm(path_0);
   char actualpath [2000];
   char *ptr;
@@ -35,7 +39,9 @@
   }"))
 
 (defn access [file-path]
-  (inline C Maybe "
+  (assert (instance? String file-path))
+
+  (inline C (maybe-of String) "
   incRef(file_path_0, 1);
   String *arg0Str = nullTerm(file_path_0);
 
@@ -49,7 +55,9 @@
   }"))
 
 (defn dir-exists? [path]
-  (inline C Maybe "
+  (assert (instance? String path))
+
+  (inline C (maybe-of String) "
     String *arg0Str = nullTerm(path_0);
     struct stat sb;
 
@@ -76,8 +84,10 @@
 (def S_IWOTH (inline C Integer "(Value *)&(Integer){IntegerType,-1,S_IWOTH}"))
 (def S_IXOTH (inline C Integer "(Value *)&(Integer){IntegerType,-1,S_IXOTH}"))
 
-(defn file-stat [path]
-  (inline C Maybe "
+(defn file-stat* [path]
+  (assert (instance? String path))
+
+  (inline C (maybe-of (list-of Integer)) "
     String *arg0Str = nullTerm(path_0);
     struct stat sb;
     List *infoList = empty_list;
@@ -85,10 +95,10 @@
     if (stat(arg0Str->buffer, &sb) == 0) {
       if (S_ISDIR(sb.st_mode)) {
         infoList = listCons(const0Ptr, infoList);
-        infoList = listCons(maybeNothing, infoList);
+        infoList = listCons(integerValue(1), infoList);
       } else {
         infoList = listCons(integerValue(sb.st_size), infoList);
-        infoList = listCons(nothing, infoList);
+        infoList = listCons(const0Ptr, infoList);
       }
       infoList = listCons(integerValue(sb.st_ctime), infoList);
       infoList = listCons(integerValue(sb.st_mode), infoList);
@@ -103,7 +113,9 @@
 "))
 
 (defn file-list* [path]
-  (inline C Maybe "
+  (assert (instance? String path))
+
+  (inline C (maybe-of (list-of String)) "
     String *arg0Str = nullTerm(path_0);
     struct stat sb;
 
@@ -159,22 +171,35 @@
                 (str permissions) ", "
                 (str ctime) ">"))))
 
+(def DirItem (any-of DirInfo FileInfo))
+
+(defn file-stat [file-name]
+  (assert (instance? String file-name))
+  (assert-result r (instance? (maybe-of DirItem) r))
+  
+  (map (file-stat* file-name)
+       (fn [[permissions ctime dir? size]]
+         (cond (= 1 dir?)
+               (DirInfo file-name permissions ctime)
+
+               (FileInfo file-name permissions ctime size)))))
+
 (defn list-files [path]
+  (assert (instance? String path))
+  (assert-result r (instance? (maybe-of (list-of DirItem)) r))
+
   (map (file-list* path)
        (fn [name-list]
-         (assert (instance? List name-list))
          (for [name name-list
                :when-not (= "." (subs name 0 1))
-               :let [file-info (map (file-stat (str path "/" name))
-                                    (fn [[permissions ctime dir? size]]
-                                      (either (and dir? (maybe (DirInfo name permissions ctime)))
-                                              (FileInfo name permissions ctime size))))]
+               :let [file-info (file-stat (str path "/" name))]
                :when file-info]
            (extract file-info)))))
 
 (defn get-environment [variable-name]
   (assert (instance? String variable-name))
-  (inline C Maybe "
+
+  (inline C (maybe-of String) "
   char *var;
   if (variable_name_0->type == StringBufferType) {
     var = ((String *)variable_name_0)->buffer;
@@ -206,7 +231,7 @@
 "))
 
 (defn error-string []
-  (inline C Maybe "
+  (inline C (maybe-of String) "
   char errStr[1000];
   strerror_r(errno, errStr, 1000);
   int64_t len = strlen(errStr);
@@ -216,7 +241,9 @@
 "))
 
 (defn change-directory [path]
-  (inline C Maybe "
+  (assert (instance? String path))
+
+  (inline C (maybe-of String) "
   String *path = nullTerm(path_0);
   if (chdir(path->buffer) == 0) {
     dec_and_free((Value *)path, 1);
@@ -227,7 +254,7 @@
 "))
 
 (defn current-directory []
-  (inline C Maybe "
+  (inline C (maybe-of String) "
   char path[1000];
   if (getcwd(path, 1000) == NULL) {
     return(nothing);
@@ -241,6 +268,9 @@
 "))
 
 (defn make-directory [path mode]
+  (assert (instance? String path))
+  (assert (instance? Integer mode))
+
   (inline C Maybe "
   String *path = nullTerm(path_0);
   if (mkdir(path->buffer, ((Integer *)mode_1)->numVal) == 0 ||
@@ -255,6 +285,8 @@
 "))
 
 (defn file-directory [src-file-name]
+  (assert (instance? String src-file-name))
+
   (map (realpath src-file-name)
        (fn [real-path]
          (let [[path-len] (reduce real-path [-1 0]
@@ -269,8 +301,14 @@
 
 (defn exec
   ([path]
+   (assert (instance? String path))
+
    (exec path empty-list))
+
   ([path args]
+   (assert (instance? String path))
+   (assert (instance? (list-of String) args))
+
    (inline C Maybe "
   String *path = nullTerm(path_0);;
 
@@ -307,6 +345,8 @@
 "))
 
 (defn waitpid [pid]
+  (assert (instance? Integer pid))
+
   (inline C Integer "
   int rv;
   int pid = (int)((Integer *)pid_0)->numVal;
