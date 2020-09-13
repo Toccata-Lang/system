@@ -297,48 +297,6 @@
                                               [slash-pos c-pos]))))]
            (subs real-path 0 path-len)))))
 
-;; TODO: eliminate once shell-proc is online
-
-(defn exec
-  ([path]
-   (assert (instance? String path))
-
-   (exec path empty-list))
-
-  ([path args]
-   (assert (instance? String path))
-   (assert (instance? (list-of String) args))
-
-   (inline C Maybe "
-  String *path = nullTerm(path_0);;
-
-  List *argList = (List *)args_1;
-  if (argList->len == 0) {
-    execl(path->buffer, \"\");
-    exit(1);
-  } else {
-    char **args = malloc(sizeof(char*) * (argList->len + 2));
-    int i;
-    Value *arg;
-    args[0] = path->buffer;
-    for (i = 1;
-         argList != (List *)0 && argList->head != (Value *)0;
-         argList = argList->tail, i++) {
-      arg = argList->head;
-      if (arg->type == StringBufferType) {
-        args[i] = ((String *)arg)->buffer;
-      } else {
-        args[i] = ((SubString *)arg)->buffer;
-      }
-    }
-    args[i] = (char *)0;
-    execv(path->buffer, args);
-    exit(1);
-  }
-  dec_and_free(args_1, 1);
-  return(nothing);
-")))
-
 (defn fork []
   (inline C Integer "
   return(integerValue(fork()));
